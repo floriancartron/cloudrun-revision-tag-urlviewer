@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cloud Run Revision Tag Url Viewer</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/2.2.1/css/dataTables.bootstrap5.css">
+</head>
+<h1 class="text-center">Cloud Run Revision Tag Url Viewer</h1>
+
+<body>
+    <div class="container content-wrapper">
+        <div class="card">
+            <div class="card-body table-container">
+                <table id="example" class="table table-row-bordered gy-5" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>Deployment Date</th>
+                            <th>URL</th>
+                            <th>identifyinglabel</th>
+                            <th>Cloud Run Service</th>
+                            <th>Base Url</th>
+                            <th>Revision Tag</th>
+                        </tr>
+                    </thead>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/2.2.1/js/dataTables.js"></script>
+    <script src="https://cdn.datatables.net/2.2.1/js/dataTables.bootstrap5.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('#example').DataTable({
+                order: [[0, 'desc']],
+                ajax: '/data',
+                columnDefs: [
+                    {
+                        targets: 0,
+                        className: 'dt-head-left dt-body-left'
+                    }
+                ],
+                pageLength: 10,
+                columns: [
+                    { data: 'date' },
+                    { data: 'url' },
+                    { data: 'identifyinglabel' },
+                    { data: 'service' },
+                    { data: 'baseurl' },
+                    { data: 'revisiontag' }
+                ]
+            });
+        });
+    </script>
+</body>
+</html>
