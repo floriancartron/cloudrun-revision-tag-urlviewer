@@ -11,10 +11,13 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=$(go env GOARCH) go build -o cloudrun-revisi
 
 FROM alpine:latest
 LABEL org.opencontainers.image.source=https://github.com/floriancartron/cloudrun-revision-tag-urlviewer
+
+RUN apk add --no-cache tzdata
 # Use a non-root user for security
 USER nobody
 
 WORKDIR /app
+
 
 # Copy the built binary from the builder stage
 COPY --from=builder --chown=nobody:nobody /app/cloudrun-revision-tag-urlviewer .

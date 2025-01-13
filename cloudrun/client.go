@@ -3,6 +3,7 @@ package cloudrun
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -100,6 +101,12 @@ func fetchAndAppendRevision(
 
 	// Convert the creation time
 	createTime := time.Unix(revision.GetCreateTime().GetSeconds(), 0)
+	location, err := time.LoadLocation(os.Getenv("CRRTUV_TIMEZONE"))
+	if err == nil {
+		createTime = createTime.In(location)
+	} else {
+		fmt.Println("Error loading location:", err)
+	}
 
 	// Construct the Row struct
 	row := Row{

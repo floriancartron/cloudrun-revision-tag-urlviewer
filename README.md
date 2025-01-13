@@ -23,6 +23,7 @@ docker run -p 8080:8080 \
   -e CRRTUV_PROJECT="your-project-with-url-masks" \
   -e CRRTUV_LOCATION="your-region" \
   -e CRRTUV_IDENTIFYING_LABEL="an-additional-label-that-appear" \
+  -e CRRTUV_TIMEZONE="timezone-to-use" \
    crrtu
 ```
 
