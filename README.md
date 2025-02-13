@@ -24,6 +24,7 @@ docker run -p 8080:8080 \
   -e CRRTUV_LOCATION="your-region" \
   -e CRRTUV_IDENTIFYING_LABEL="an-additional-label-that-appear" \
   -e CRRTUV_TIMEZONE="timezone-to-use" \
+  -e CRRTUV_MAX_REVISIONS="max-revisions-to-fetch-for-each-service,defaults to 100" \
    crrtu
 ```
 

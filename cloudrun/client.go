@@ -24,7 +24,7 @@ type Row struct {
 }
 
 // GetCloudRunData fetches data from Cloud Run
-func GetCloudRunData(project string, location string, identifyingLabel string) ([]Row, error) {
+func GetCloudRunData(project string, location string, identifyingLabel string, maxRevisions int) ([]Row, error) {
 	var rows []Row
 	var mu sync.Mutex // Mutex to safely append to rows
 	var wg sync.WaitGroup
@@ -56,13 +56,23 @@ func GetCloudRunData(project string, location string, identifyingLabel string) (
 			return nil, fmt.Errorf("failed to list services: %v", err)
 		}
 
-		// Iterate over the traffic tags for the service
-		for _, t := range service.GetTraffic() {
+		revisionsCount := 0
+		tags := service.GetTraffic() // Get the revisions tags
+
+		// Iterate over the tags in reverse order
+		// this allow to get the most recent revisions tags first
+		for i := len(tags) - 1; i >= 0; i-- {
+			t := tags[i]
 			if t.Tag != "" {
 				wg.Add(1) // Increment WaitGroup counter
 
 				// Call the helper function as a goroutine
 				go fetchAndAppendRevision(ctx, rc, identifyingLabel, service, t.Revision, t.Tag, &rows, &mu, &wg)
+
+				revisionsCount++
+				if revisionsCount >= maxRevisions {
+					break
+				}
 			}
 		}
 	}

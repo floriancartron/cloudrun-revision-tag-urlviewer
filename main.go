@@ -4,13 +4,17 @@ import (
 	"cloudrun-revision-tag-urlviewer/cloudrun"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 )
 
 func getData(w http.ResponseWriter, r *http.Request) {
-	data, err := cloudrun.GetCloudRunData(os.Getenv("CRRTUV_PROJECT"), os.Getenv("CRRTUV_LOCATION"), os.Getenv("CRRTUV_IDENTIFYING_LABEL"))
+	maxRevisions, err := strconv.Atoi(os.Getenv("CRRTUV_MAX_REVISIONS"))
+	if err != nil {
+		maxRevisions = 100
+	}
+	data, err := cloudrun.GetCloudRunData(os.Getenv("CRRTUV_PROJECT"), os.Getenv("CRRTUV_LOCATION"), os.Getenv("CRRTUV_IDENTIFYING_LABEL"), maxRevisions)
 	response := map[string]interface{}{
 		"data": nil,
 	}
@@ -26,7 +30,7 @@ func getData(w http.ResponseWriter, r *http.Request) {
 }
 
 func serveHTML(w http.ResponseWriter, r *http.Request) {
-	html, err := ioutil.ReadFile("index.html")
+	html, err := os.ReadFile("index.html")
 	if err != nil {
 		fmt.Println("Error reading index.html:", err)
 		return
