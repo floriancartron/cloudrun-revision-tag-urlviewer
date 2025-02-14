@@ -3,11 +3,14 @@ package cloudrun
 import (
 	"context"
 	"fmt"
+	"html"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	compute "cloud.google.com/go/compute/apiv1"
+	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	run "cloud.google.com/go/run/apiv2"
 	runpb "cloud.google.com/go/run/apiv2/runpb"
 	"google.golang.org/api/iterator"
@@ -31,6 +34,11 @@ func GetCloudRunData(project string, location string, identifyingLabel string, m
 
 	// Initialize Cloud Run client
 	ctx := context.Background()
+	negs, err := getServerlessNegsUrlMasks(ctx, project, location)
+	if err != nil {
+		negs = map[string]string{}
+		fmt.Printf("failed to get serverless neg: %v\n", err)
+	}
 	sc, err := run.NewServicesClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cloudrun services client: %v", err)
@@ -55,7 +63,10 @@ func GetCloudRunData(project string, location string, identifyingLabel string, m
 		if err != nil {
 			return nil, fmt.Errorf("failed to list services: %v", err)
 		}
-
+		if service.GetAnnotations()["baseurl"] == "" && service.GetAnnotations()["serverless-neg"] == "" {
+			fmt.Printf("service %s has no baseurl or serverless-neg annotation, it is ignored\n", service.Name)
+			continue
+		}
 		revisionsCount := 0
 		tags := service.GetTraffic() // Get the revisions tags
 
@@ -67,7 +78,7 @@ func GetCloudRunData(project string, location string, identifyingLabel string, m
 				wg.Add(1) // Increment WaitGroup counter
 
 				// Call the helper function as a goroutine
-				go fetchAndAppendRevision(ctx, rc, identifyingLabel, service, t.Revision, t.Tag, &rows, &mu, &wg)
+				go fetchAndAppendRevision(ctx, negs, rc, identifyingLabel, service, t.Revision, t.Tag, &rows, &mu, &wg)
 
 				revisionsCount++
 				if revisionsCount >= maxRevisions {
@@ -86,6 +97,7 @@ func GetCloudRunData(project string, location string, identifyingLabel string, m
 // fetchAndAppendRevision fetches revision details and appends them to the shared rows slice
 func fetchAndAppendRevision(
 	ctx context.Context,
+	negs map[string]string,
 	rc *run.RevisionsClient,
 	identifyingLabel string,
 	service *runpb.Service,
@@ -118,13 +130,18 @@ func fetchAndAppendRevision(
 		fmt.Println("Error loading location:", err)
 	}
 
+	baseUrl, generatedUrl, err := getRevisionTagUrl(tag, service, negs)
+	if err != nil {
+		fmt.Printf("%v,%s\n", err, revisionName)
+		return
+	}
 	// Construct the Row struct
 	row := Row{
 		Date:             createTime.Format("2006-01-02 15:04:05"),
-		Url:              fmt.Sprintf("<a target=\"_blank\" href=\"https://%s.%s\">%s.%s</a>", tag, service.Annotations["baseurl"], tag, service.Annotations["baseurl"]),
+		Url:              generatedUrl,
 		IdentifyingLabel: fmt.Sprintf("%s=%s", identifyingLabel, service.Labels[identifyingLabel]),
 		Service:          getConsoleServiceUrl(service.Name),
-		BaseUrl:          service.Annotations["baseurl"],
+		BaseUrl:          baseUrl,
 		RevisionTag:      tag,
 	}
 
@@ -137,4 +154,45 @@ func fetchAndAppendRevision(
 func getConsoleServiceUrl(serviceFullName string) string {
 	serviceNameSplitted := strings.Split(serviceFullName, "/")
 	return fmt.Sprintf("<a target=\"_blank\" href=\"https://console.cloud.google.com/run/detail/%s/%s/revisions?inv=1&invt=AbmmaA&project=%s\">%s</a>", serviceNameSplitted[3], serviceNameSplitted[5], serviceNameSplitted[1], serviceNameSplitted[5])
+}
+
+func getRevisionTagUrl(tag string, service *runpb.Service, negsUrlMasks map[string]string) (string, string, error) {
+	if service.Annotations["serverless-neg"] != "" {
+		if urlMask, ok := negsUrlMasks[service.Annotations["serverless-neg"]]; ok {
+			url := strings.Replace(strings.Replace(urlMask, "<tag>", tag, 1), "<service>", strings.Split(service.Name, "/")[5], 1)
+			return html.EscapeString(urlMask), fmt.Sprintf("<a target=\"_blank\" href=\"https://%s\">%s</a>", url, url), nil
+		}
+	}
+	if service.Annotations["baseurl"] != "" {
+		return service.Annotations["baseurl"], fmt.Sprintf("<a target=\"_blank\" href=\"https://%s.%s\">%s.%s</a>", tag, service.Annotations["baseurl"], tag, service.Annotations["baseurl"]), nil
+	}
+	return "", "", fmt.Errorf("failed to get revision tag url for service %s", service.Name)
+}
+
+func getServerlessNegsUrlMasks(ctx context.Context, project string, location string) (map[string]string, error) {
+	nc, err := compute.NewRegionNetworkEndpointGroupsRESTClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create network endpoint group client: %v", err)
+	}
+	defer nc.Close()
+
+	masksList := make(map[string]string)
+
+	req := &computepb.ListRegionNetworkEndpointGroupsRequest{
+		Region:  location,
+		Project: project,
+	}
+	it := nc.List(ctx, req)
+	for {
+		neg, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			fmt.Printf("failed to get url masks: %v\n", err)
+			return nil, err
+		}
+		masksList[neg.GetName()] = neg.GetCloudRun().GetUrlMask()
+	}
+	return masksList, nil
 }

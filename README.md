@@ -11,7 +11,9 @@ This application fetches data from Google Cloud Run services in order to show UR
 
 ## Prerequisites
 
-- Your Cloud Run Services should have an annotation with the base url for the service. The annotation should be named `baseurl`. For example, if your service is exposed with a URL mask like `<tag>.example.com`, the annoation should be `baseurl: example.com`.
+- Your Cloud Run service should have either:
+  - An annotation with your serverless neg name. The annotation should be named `serverless-neg`. The app will replace `<tag>` and `<service>` with the revision tag and service name respectively. This behaviour requires the runtime to have permissions to list the serverless network endpoint groups(roles/compute.networkEndpointGroups.list).
+  - An annotation with the base url for the service. Only used if the previous annotation is not present. The annotation should be named `baseurl`. For example, if your service is exposed with a URL mask like `<tag>.example.com`, the annoation should be `baseurl: example.com`.
 
 ## Run the app
 
