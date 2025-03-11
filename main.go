@@ -1,12 +1,13 @@
 package main
 
 import (
-	"cloudrun-revision-tag-urlviewer/cloudrun"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"strconv"
+
+	"github.com/floriancartron/cloudrun-revision-tag-urlviewer/cloudrun"
 )
 
 func getData(w http.ResponseWriter, r *http.Request) {

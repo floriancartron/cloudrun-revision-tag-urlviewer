@@ -1,4 +1,4 @@
-module cloudrun-revision-tag-urlviewer
+module github.com/floriancartron/cloudrun-revision-tag-urlviewer
 
 go 1.23.4
 

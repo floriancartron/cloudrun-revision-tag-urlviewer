@@ -9,10 +9,9 @@ import (
 	"sync"
 	"time"
 
-	compute "cloud.google.com/go/compute/apiv1"
-	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	run "cloud.google.com/go/run/apiv2"
 	runpb "cloud.google.com/go/run/apiv2/runpb"
+	neg "github.com/floriancartron/cloudrun-revision-tag-urlviewer/neg"
 	"google.golang.org/api/iterator"
 )
 
@@ -34,7 +33,7 @@ func GetCloudRunData(project string, location string, identifyingLabel string, m
 
 	// Initialize Cloud Run client
 	ctx := context.Background()
-	negs, err := getServerlessNegsUrlMasks(ctx, project, location)
+	negs, err := neg.GetServerlessNegsUrlMasks(ctx, project, location)
 	if err != nil {
 		negs = map[string]string{}
 		fmt.Printf("failed to get serverless neg: %v\n", err)
@@ -167,32 +166,4 @@ func getRevisionTagUrl(tag string, service *runpb.Service, negsUrlMasks map[stri
 		return service.Annotations["baseurl"], fmt.Sprintf("<a target=\"_blank\" href=\"https://%s.%s\">%s.%s</a>", tag, service.Annotations["baseurl"], tag, service.Annotations["baseurl"]), nil
 	}
 	return "", "", fmt.Errorf("failed to get revision tag url for service %s", service.Name)
-}
-
-func getServerlessNegsUrlMasks(ctx context.Context, project string, location string) (map[string]string, error) {
-	nc, err := compute.NewRegionNetworkEndpointGroupsRESTClient(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create network endpoint group client: %v", err)
-	}
-	defer nc.Close()
-
-	masksList := make(map[string]string)
-
-	req := &computepb.ListRegionNetworkEndpointGroupsRequest{
-		Region:  location,
-		Project: project,
-	}
-	it := nc.List(ctx, req)
-	for {
-		neg, err := it.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			fmt.Printf("failed to get url masks: %v\n", err)
-			return nil, err
-		}
-		masksList[neg.GetName()] = neg.GetCloudRun().GetUrlMask()
-	}
-	return masksList, nil
 }
