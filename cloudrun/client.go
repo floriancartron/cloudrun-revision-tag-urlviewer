@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
@@ -26,17 +27,18 @@ type Row struct {
 }
 
 // GetCloudRunData fetches data from Cloud Run
-func GetCloudRunData(project string, location string, identifyingLabel string, maxRevisions int) ([]Row, error) {
+func GetCloudRunData(logger *slog.Logger, project string, location string, identifyingLabel string, maxRevisions int) ([]Row, error) {
 	var rows []Row
 	var mu sync.Mutex // Mutex to safely append to rows
 	var wg sync.WaitGroup
 
+	logger.Info(fmt.Sprintf("Fetching Cloud Run data for %s in %s", project, location))
 	// Initialize Cloud Run client
 	ctx := context.Background()
-	negs, err := neg.GetServerlessNegsUrlMasks(ctx, project, location)
+	negs, err := neg.GetServerlessNegsUrlMasks(logger, ctx, project, location)
 	if err != nil {
 		negs = map[string]string{}
-		fmt.Printf("failed to get serverless neg: %v\n", err)
+		logger.Error(fmt.Sprintf("failed to get serverless neg: %v", err))
 	}
 	sc, err := run.NewServicesClient(ctx)
 	if err != nil {
@@ -63,7 +65,7 @@ func GetCloudRunData(project string, location string, identifyingLabel string, m
 			return nil, fmt.Errorf("failed to list services: %v", err)
 		}
 		if service.GetAnnotations()["baseurl"] == "" && service.GetAnnotations()["serverless-neg"] == "" {
-			fmt.Printf("service %s has no baseurl or serverless-neg annotation, it is ignored\n", service.Name)
+			logger.Debug(fmt.Sprintf("service %s has no baseurl or serverless-neg annotation, it is ignored", service.Name))
 			continue
 		}
 		revisionsCount := 0
@@ -77,7 +79,7 @@ func GetCloudRunData(project string, location string, identifyingLabel string, m
 				wg.Add(1) // Increment WaitGroup counter
 
 				// Call the helper function as a goroutine
-				go fetchAndAppendRevision(ctx, negs, rc, identifyingLabel, service, t.Revision, t.Tag, &rows, &mu, &wg)
+				go fetchAndAppendRevision(logger, ctx, negs, rc, identifyingLabel, service, t.Revision, t.Tag, &rows, &mu, &wg)
 
 				revisionsCount++
 				if revisionsCount >= maxRevisions {
@@ -89,12 +91,13 @@ func GetCloudRunData(project string, location string, identifyingLabel string, m
 
 	// Wait for all goroutines to finish
 	wg.Wait()
-
+	logger.Info(fmt.Sprintf("Data fetched succesfully for %s in %s", project, location))
 	return rows, nil
 }
 
 // fetchAndAppendRevision fetches revision details and appends them to the shared rows slice
 func fetchAndAppendRevision(
+	logger *slog.Logger,
 	ctx context.Context,
 	negs map[string]string,
 	rc *run.RevisionsClient,
@@ -116,7 +119,7 @@ func fetchAndAppendRevision(
 	// Fetch revision details
 	revision, err := rc.GetRevision(ctx, req)
 	if err != nil {
-		fmt.Printf("failed to get revision %s: %v\n", revisionName, err)
+		logger.Error(fmt.Sprintf("failed to get revision %s: %v\n", revisionName, err))
 		return
 	}
 
@@ -126,12 +129,12 @@ func fetchAndAppendRevision(
 	if err == nil {
 		createTime = createTime.In(location)
 	} else {
-		fmt.Println("Error loading location:", err)
+		logger.Error(fmt.Sprintf("Error loading location: %v", err))
 	}
 
 	baseUrl, generatedUrl, err := getRevisionTagUrl(tag, service, negs)
 	if err != nil {
-		fmt.Printf("%v,%s\n", err, revisionName)
+		logger.Error(fmt.Sprintf("%v,%s", err, revisionName))
 		return
 	}
 	// Construct the Row struct

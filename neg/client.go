@@ -3,13 +3,14 @@ package neg
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	compute "cloud.google.com/go/compute/apiv1"
 	"cloud.google.com/go/compute/apiv1/computepb"
 	"google.golang.org/api/iterator"
 )
 
-func GetServerlessNegsUrlMasks(ctx context.Context, project string, location string) (map[string]string, error) {
+func GetServerlessNegsUrlMasks(logger *slog.Logger, ctx context.Context, project string, location string) (map[string]string, error) {
 	nc, err := compute.NewRegionNetworkEndpointGroupsRESTClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create network endpoint group client: %v", err)
@@ -29,7 +30,7 @@ func GetServerlessNegsUrlMasks(ctx context.Context, project string, location str
 			break
 		}
 		if err != nil {
-			fmt.Printf("failed to get url masks: %v\n", err)
+			logger.Error(fmt.Sprintf("failed to get url masks: %v\n", err))
 			return nil, err
 		}
 		masksList[neg.GetName()] = neg.GetCloudRun().GetUrlMask()

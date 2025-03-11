@@ -3,19 +3,23 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
 
 	"github.com/floriancartron/cloudrun-revision-tag-urlviewer/cloudrun"
+	"github.com/floriancartron/cloudrun-revision-tag-urlviewer/utils"
 )
+
+var logger *slog.Logger
 
 func getData(w http.ResponseWriter, r *http.Request) {
 	maxRevisions, err := strconv.Atoi(os.Getenv("CRRTUV_MAX_REVISIONS"))
 	if err != nil {
 		maxRevisions = 100
 	}
-	data, err := cloudrun.GetCloudRunData(os.Getenv("CRRTUV_PROJECT"), os.Getenv("CRRTUV_LOCATION"), os.Getenv("CRRTUV_IDENTIFYING_LABEL"), maxRevisions)
+	data, err := cloudrun.GetCloudRunData(logger, os.Getenv("CRRTUV_PROJECT"), os.Getenv("CRRTUV_LOCATION"), os.Getenv("CRRTUV_IDENTIFYING_LABEL"), maxRevisions)
 	response := map[string]interface{}{
 		"data": nil,
 	}
@@ -23,6 +27,8 @@ func getData(w http.ResponseWriter, r *http.Request) {
 		response = map[string]interface{}{
 			"data": data,
 		}
+	} else {
+		logger.Error(fmt.Sprintf("Error getting Cloud Run data: %v", err))
 	}
 
 	// Convert response to JSON
@@ -47,13 +53,18 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	loglevel := os.Getenv("CRRTUV_LOG_LEVEL")
+	if loglevel == "" {
+		loglevel = "DEBUG"
+	}
+	logger = utils.NewLogger(loglevel)
 	http.HandleFunc("/", serveHTML)
 	http.HandleFunc("/data", getData)
 	http.HandleFunc("/healthz", healthHandler)
 
-	fmt.Println("Server is running on port 8080...")
+	logger.Info("Server is running on port 8080...")
 	err := http.ListenAndServe("0.0.0.0:8080", nil)
 	if err != nil {
-		fmt.Printf("Error starting server: %v\n", err)
+		logger.Error(fmt.Sprintf("Error starting server: %v", err))
 	}
 }
